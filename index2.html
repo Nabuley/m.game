@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Card Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+            position: relative;
+        }
+        canvas {
+            display: block;
+        }
+        #player-health-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 20px;
+            background: red;
+        }
+        #boss-health-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            background: purple;
+        }
+        #game-over-screen, #victory-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 48px;
+            text-align: center;
+        }
+        #restart-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 24px;
+            margin-left: 20px;
+            border-radius: 20px;
+            background-color: #ff0000;
+            border: none;
+            cursor: pointer;
+        }
+        #restart-button-victory {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 24px;
+            margin-left: 20px;
+            border-radius: 20px;
+            background-color: #00c3ff;
+            border: none;
+            cursor: pointer;
+        }
+        #damage-display {
+            position: absolute;
+            top: 30px;
+            left: 10px;
+            color: white;
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="player-health-bar"></div>
+    <div id="boss-health-bar"></div>
+    <div id="damage-display"></div>
+    <div id="game-over-screen">
+        <div>게임 오버!</div>
+        <button id="restart-button">다시 시작</button>
+    </div>
+    <div id="victory-screen">
+        <div>승리!</div>
+        <button id="restart-button-victory">다시 시작</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const Invincibility = 30;
+        let invincibility = 0;
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const boss_bulet_num = 30;
+        let gameOver = false;
+
+        class Player {
+            constructor() {
+                this.width = 40;
+                this.height = 40;
+                this.x = canvas.width / 2 - this.width / 2;
+                this.y = canvas.height - this.height - 50;
+                this.speed = 7;
+                this.health = 251;
+                this.damage = 6.5;
+                this.lastShotTime = 0;
+                this.shotDelay = 250; // 0.25초 딜레이
+            }
+
+            draw() {
+                ctx.fillStyle = "white";
+                if (invincibility > 0 && invincibility % 2 === 1) {
+                    ctx.fillStyle = "black";
+                }
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, angle = Math.PI / 2, id = 0, num = 0, damage = player.damage) {
+                this.x = x;
+                this.y = y;
+                this.angle = angle;
+                this.id = id;
+                this.num = num
+                this.width = 5;
+                this.height = 15;
+                this.speed = 12;
+                this.damage = damage;
+            }
+            
+            draw() {
+                ctx.fillStyle = "red";
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+
+            update() {
+                const angle = this.angle / this.num;
+                this.x += this.speed * Math.cos(angle * (this.id - (this.num - 1) / 2) + Math.PI / 2);
+                this.y -= this.speed * Math.sin(angle * (this.id - (this.num - 1) / 2) + Math.PI / 2);
+            }
+
+        }
+
+        class Boss {
+            constructor() {
+                this.x = canvas.width / 2 - 50;
+                this.y = 50;
+                this.width = 100;
+                this.height = 100;
+                this.health = 2150;
+                this.maxHealth = 2150;
+                this.speed = 2;
+                this.direction = 3.25;
+                this.patternInterval = setInterval(() => this.attackPattern(), 1500);
+            }
+
+            draw() {
+                ctx.fillStyle = "purple";
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+
+            update() {
+                this.x += this.speed * this.direction;
+                if (this.x <= 100 || this.x + this.width >= canvas.width - 100 || Math.random() * 50 > 49) {
+                    this.direction *= -1;
+                }
+            }
+
+            attackPattern() {
+                const phase = Math.random() * 2;
+                for (let i = 0; i <= (phase <= 1 ? boss_bulet_num : boss_bulet_num * 2 / 3); i++){
+                    bossBullets.push(new BossBullet(phase <= 1 ? "att1" : "att2", this.x + this.width / 2, this.y + this.height, i, (phase <= 1 ? boss_bulet_num : boss_bulet_num * 2 / 3), Math.PI * 1.5 - 2 * Math.atan(((player.x - 25) - (boss.x - 50)) / ((player.y - 25) - (boss.y - 50)))));
+                }
+            }
+        }
+
+        /*let damage_list = [];
+
+        class Damage {
+            constructor(damage, x, y) {
+                this.damage = damage;
+                this.x = x;
+                this.y = y;
+                this.time = 250;
+            }
+
+            update() {
+                this.y -= 2;
+                this.time -= 25;
+                ctx.font = "20px Arial";
+                ctx.fillStyle = "white";
+                ctx.fillText(`DMG ${temp_boss_hp - boss.health}`, this.x, this.y);
+            }
+
+        }*/
+
+        class BossBullet {
+            constructor(name, x, y, id = 0, num = 0, angle = 0, angle2 = 0) {
+                this.name = name
+                this.x = x;
+                this.y = y;
+                this.width = 10;
+                this.height = 10;
+                this.speed = 8;
+                this.id = id;
+                this.num = num;
+                this.angle = angle;
+                this.angle2 = angle2;
+            }
+            
+            draw() {
+                ctx.fillStyle = "blue";
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+
+            update(angle) {
+                if (this.name === "att1") {
+                    this.x += this.speed * Math.cos(this.angle + Math.PI * 2 / this.num * this.id);
+                    this.y += this.speed * Math.sin(this.angle + Math.PI * 2 / this.num * this.id);
+                } else if (this.name === "att2") {
+                    this.x += this.speed * Math.cos(this.angle2 + this.angle / 2 - (angle / (this.num - 1) * this.id));//Math.cos(angle * (this.id - (this.num - 1) / 2) + Math.PI / 2);
+                    this.y += this.speed * Math.sin(this.angle2 + this.angle / 2 - (angle / (this.num - 1) * this.id));
+                }
+            }
+            
+            update2(angle) {
+                this.x += this.speed * Math.cos(this.angle2 + this.angle / 2 - (angle / (this.num - 1) * this.id));//Math.cos(angle * (this.id - (this.num - 1) / 2) + Math.PI / 2);
+                this.y += this.speed * Math.sin(this.angle2 + this.angle / 2 - (angle / (this.num - 1) * this.id));
+            }
+        }
+
+        
+        let bullet_num = 1;
+        const player = new Player();
+        const bullets = [];
+        const boss = new Boss();
+        const bossBullets = [];
+        let keys = {};
+
+        let temp_boss_hp = 0;
+
+        function updateHealthBar() {
+            document.getElementById("player-health-bar").style.width = player.health * 2 + "px";
+            document.getElementById("boss-health-bar").style.width = (boss.health / boss.maxHealth * 100) + "%";
+            /*
+            if (temp_boss_hp - boss.health > 0) {
+                damage_list.push(new Damage(temp_boss_hp - boss.health, boss.x, boss.y))
+            }*/
+        }
+        
+        function updateDamageDisplay() {
+            document.getElementById("damage-display").textContent = `Damage: ${player.damage.toFixed(1)}`;
+        }
+
+        function checkCollisions() {
+            invincibility -= 1;
+            //temp_boss_hp = boss.health;
+            bullets.forEach((bullet, bulletIndex) => {
+                if (
+                    bullet.x < boss.x + boss.width &&
+                    bullet.x + bullet.width > boss.x &&
+                    bullet.y < boss.y + boss.height &&
+                    bullet.y + bullet.height > boss.y
+                ) {
+                    bullets.splice(bulletIndex, 1);
+                    boss.health -= bullet.damage;
+                }
+            });
+
+            bossBullets.forEach((bullet, bulletIndex) => {
+                if (
+                    bullet.x < player.x + player.width &&
+                    bullet.x + bullet.width > player.x &&
+                    bullet.y < player.y + player.height &&
+                    bullet.y + bullet.height > player.y &&
+                    invincibility <= 0
+                ) {
+                    bossBullets.splice(bulletIndex, 1);
+                    player.health -= 10;
+                    invincibility = Invincibility;
+                }
+            });
+        }
+
+        function gameOverCheck() {
+            if (player.health <= 0) {
+                gameOver = true;
+                document.getElementById("game-over-screen").style.display = "flex";
+            } else if (boss.health <= 0) {
+                gameOver = true;
+                document.getElementById("victory-screen").style.display = "flex";
+            }
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (gameOver) return;
+
+            player.draw();
+            boss.update();
+            boss.draw();
+
+            bullets.forEach((bullet, index) => {
+                bullet.update();
+                bullet.draw();
+                if (bullet.y < 0) bullets.splice(index, 1);
+            });
+
+            bossBullets.forEach((bullet, index) => {
+                bullet.update(Math.PI * 0.5);
+                bullet.draw();
+                if (bullet.y > canvas.height) bossBullets.splice(index, 1);
+            });
+
+            if (Math.random() * 720 <= 1) {
+                const random_num = Math.random() * 2;
+                if (random_num <= 1) {
+                    bullet_num += 1;
+                } else if (random_num > 1) {
+                    player.shotDelay -= 25;
+                    player.damage += 1.2;
+                    console.log(player.shotDelay);
+                }
+            }
+            const now = Date.now();
+            if (now - player.lastShotTime >= player.shotDelay) {
+                for (let i = 0; i < bullet_num; i++) {
+                    bullets.push(new Bullet(player.x + player.width / 2 - 2.5, player.y, Math.PI / 4, i, bullet_num, player.damage));
+                }
+                player.lastShotTime = now;
+            }
+
+            checkCollisions();
+            gameOverCheck();
+            updateHealthBar();
+        }
+
+        function gameLoop() {
+            update();
+            updateDamageDisplay();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+
+        window.addEventListener("keydown", (e) => {
+            keys[e.code] = true;
+        });
+
+        window.addEventListener("keyup", (e) => {
+            keys[e.code] = false;
+        });
+
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            player.x = e.clientX - rect.left - player.width / 2;
+            player.y = e.clientY - rect.top - player.height / 2;
+        });
+
+        document.getElementById("restart-button").addEventListener("click", () => {
+            location.reload();
+        });
+
+        document.getElementById("restart-button-victory").addEventListener("click", () => {
+            location.reload();
+        });
+
+        setInterval(movePlayer, 20);
+    </script>
+</body>
+</html>
